@@ -397,9 +397,9 @@ pip和conda在安装软件包时，在依赖关系方面的处理机制不同。
 >
 >- defaults/win-64::_ipyw_jlab_nb_ext_conf==0.1.0=py38_0
 >  failed with repodata from current_repodata.json, will retry with next repodata source.
->  Solving environment: failed with repodata from current_repodata.json, will retry with next repodata
->  source.
->  Collecting package metadata (repodata.json): failed
+>   Solving environment: failed with repodata from current_repodata.json, will retry with next repodata
+>   source.
+>   Collecting package metadata (repodata.json): failed
 >
 >  RemoveError: 'requests' is a dependency of conda and cannot be removed from
 >  conda's operating environment. 
@@ -461,5 +461,39 @@ pip install numpy pandas matplotlib -y  # 自动安装numpy、pandas和matplotli
 
 ***
 
+## ROS2
+
+### 核心概念
+
+#### Workspace：开发过程的大本营
+
+ROS系统中一个典型的工作空间结构如图所示，这个dev_ws就是工作空间的根目录，里边会有四个子目录，或者叫做四个子空间。
+
+![image-20220524111415729](https://book.guyuehome.com/ROS2/2.%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5/image/2.1_%E5%B7%A5%E4%BD%9C%E7%A9%BA%E9%97%B4/image-20220524111415729.png)
+
+- **src，代码空间**，未来编写的代码、脚本，都需要人为的放置到这里；
+- **build，编译空间**，保存编译过程中产生的中间文件；
+- **install，安装空间**，放置编译得到的可执行文件和脚本；
+- **log，日志空间**，编译和运行过程中，保存各种警告、错误、信息等日志。
+
+总体来讲，这四个空间的文件夹，我们绝大部分操作都是在src中进行的，编译成功后，就会执行install里边的结果，build和log两个文件夹用的很少。
 
 
+
+#### Package：功能包，功能源码的聚集地
+
+#### Node：机器人的工作细胞
+
+#### Topic：节点之间传递数据的桥梁
+
+#### Service：节点之间的你问我答
+
+#### Interface：数据传递的标准结构
+
+#### Parameter：机器人系统的全局字典
+
+#### Action：完整行为的流程管理
+
+#### me
+
+#### DDS(Data Distribution Service)：机器人的神经网络
