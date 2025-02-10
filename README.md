@@ -740,3 +740,607 @@ QoS是一种网络传输策略，应用程序指定所需要的网络传输质�
 ##### 什么叫分布式？
 
 之前我们也讲过，在ROS系统中，机器人功能是由各种节点组成的，这些节点可能位于不同的计算机中，这种结构可以将原本资源消耗较多的任务，分配到不同的平台上，减轻计算压力，这就是分布式通信框架的典型应用之一。
+
+### 常用工具
+
+#### Launch：多节点启动与配置脚本
+
+一种可以一次性启动所有节点的方式，**Launch启动文件**，它是ROS系统中多节点启动与配置的一种脚本。**ROS2中的Launch文件就是基于Python描述的**。
+
+Launch的核心目的是**启动节点**，我们在命令行中输入的各种参数，在Launch文件中，通过类似这样的很多代码模版，也可以进行配置，甚至还可以使用Python原有的编程功能，大大丰富了启动过程中的多样化配置。
+
+##### **Launch文件包含**
+
+在复杂的机器人系统中，launch文件也会有很多，此时我们可以使用类似编程中的include机制，让launch文件互相包含。
+
+#### **TF：机器人坐标系管理神器**
+
+##### 机器人中的坐标系
+
+比如在机械臂形态的机器人中，机器人安装的位置叫做**基坐标系**Base Frame，机器人安装位置在外部环境下的参考系叫做**世界坐标系**World Frame，机器人末端夹爪的位置叫做**工具坐标系**，外部被操作物体的位置叫做**工件坐标系**，在机械臂抓取外部物体的过程中，这些坐标系之间的关系也在跟随变化。
+
+在移动机器人系统中，坐标系一样至关重要，比如一个移动机器人的中心点是**基坐标系**Base Link，雷达所在的位置叫做**雷达坐标系**laser link，机器人要移动，里程计会累积位置，这个位置的参考系叫做**里程计坐标系**odom，里程计又会有累积误差和漂移，绝对位置的参考系叫做**地图坐标系**map。
+
+关于坐标系变换关系的基本理论，在每一本机器人学的教材中都会有讲解，可以分解为**平移和旋转**两个部分，通过一个四乘四的矩阵进行描述，在空间中画出坐标系，那两者之间的变换关系，其实就是向量的数学描述。
+
+##### **查看TF树**
+
+在当前运行的两只海龟中，有哪些坐标系呢，我们可以通过这个小工具来做查看。
+
+```bash
+ros2 run tf2_tools view_frames 
+```
+
+默认在当前终端路径下生成了一个frames.pdf文件，打开之后，就可以看到系统中各个坐标系的关系了。
+
+##### **查询坐标变换信息**
+
+只看到坐标系的结构还不行，如果我们想要知道某两个坐标系之间的具体关系，可以通过tf2_echo这个工具查看：
+
+```bash
+ros2 run tf2_ros tf2_echo turtle2 turtle1
+```
+
+运行成功后，终端中就会循环打印坐标系的变换数值了，由平移和旋转两个部分组成，还有旋转矩阵。
+
+##### **静态TF广播**
+
+坐标变换中最为简单的应该是相对位置不发生变化的情况，比如你家的房子在哪个位置，只要房子不拆，这个坐标应该就不会变化。在机器人系统中也很常见，比如激光雷达和机器人底盘之间的位置关系，安装好之后基本不会变化。
+
+在TF中，这种情况也称之为**静态TF变换**.
+
+#### **URDF：机器人建模方法**
+
+ROS专门提供了一种机器人建模方法——**URDF**，用来描述机器人外观、性能等各方面属性。
+
+##### **机器人的组成**
+
+建模描述机器人的过程中，我们自己需要先熟悉机器人的组成和参数，比如机器人一般是由**硬件结构、驱动系统、传感器系统、控制系统**四大部分组成，市面上一些常见的机器人，无论是移动机器人还是机械臂，我们都可以按照这四大组成部分进行分解。
+
+- 硬件结构就是底盘、外壳、电机等实打实可以看到的设备；
+- 驱动系统就是可以驱使这些设备正常使用的装置，比如电机的驱动器，电源管理系统等；
+- 传感系统包括电机上的编码器、板载的IMU、安装的摄像头、雷达等等，便于机器人感知自己的状态和外部的环境；
+- 控制系统就是我们开发过程的主要载体了，一般是树莓派、电脑等计算平台，以及里边的操作系统和应用软件。
+
+机器人建模的过程，其实就是按照类似的思路，通过建模语言，把机器人每一个部分都描述清楚，再组合起来的过程。
+
+#### **URDF**
+
+ROS中的建模方法叫做**URDF**，全称是**统一机器人描述格式**，不仅可以清晰描述机器人自身的模型，还可以描述机器人的外部环境。
+
+![image-20220528144424329](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.3_URDF/image-20220528144424329.png)
+
+URDF模型文件使用的是**XML格式**，右侧就是一个机器人的URDF描述，乍看上去，有点像网页开发的源代码，都是由一系列尖括号包围的标签和其中的属性组合而成。
+
+如何使用这样一个文件描述机器人呢？比如机械臂，大家可以看下自己的手臂，我们的手臂是由大臂和小臂组成，他们独自是无法运动的，必须通过一个手肘关节连接之后，才能通过肌肉驱动，产生相对运动。
+
+在建模中，大臂和小臂就类似机器人的这些独立的刚体部分，称为**连杆Link**，手肘就类似于机器人电机驱动部分，称为**关节joint**。
+
+所以在URDF建模过程中，关键任务就是通过这里的<link>和<joint>，理清楚每一个连杆和关节的描述信息。
+
+##### **连杆Link的描述**
+
+<link>标签用来描述机器人某个刚体部分的**外观和物理属性**，外观包括尺寸、颜色、形状，物理属性包括质量、惯性矩阵、碰撞参数等。
+
+![image-20220528144534685](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.3_URDF/image-20220528144534685.png)
+
+以这个机械臂连杆为例，它的link描述如下：
+
+![image-20220528144549092](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.3_URDF/image-20220528144549092.png)
+
+link标签中的name表示该连杆的名称，我们可以自定义，未来joint连接link的时候，会使用到这个名称。
+
+link里边的<visual>部分用来描述机器人的外观，比如：
+
+- <geometry>表示**几何形状**，里边使用<mesh>调用了一个在三维软件中提前设计好的蓝色外观，就是这个stl文件，看上去和真实机器人是一致的
+- <origin>表示**坐标系相对初始位置的偏移**，分别是x、y、z方向上的平移，和roll、pitch、raw旋转，不需要偏移的话，就全为0。
+
+第二个部分<collision>，描述**碰撞参数**，里边的内容似乎和<visual>一样，也有<geometry>和<origin>，看似相同，其实区别还是比较大的。
+
+- <visual>部分重在描述机器人看上去的状态，也就是视觉效果；
+- <collision>部分则是描述机器人运动过程中的状态，比如机器人与外界如何接触算作碰撞。
+
+在这个机器人模型中，蓝色部分是通过<visual>来描述的，在实际控制过程中，这样复杂的外观在计算碰撞检测时，要求的算力较高，为了简化计算，我们将碰撞检测用的模型简化为了绿色框的圆柱体，也就是<collision>里边<geometry>描述的形状。<origin>坐标系偏移也是类似，可以描述刚体质心的偏移。
+
+![image-20220528144603646](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.3_URDF/image-20220528144603646.png)
+
+如果是移动机器人的话，link也可以用来描述小车的车体、轮子等部分。
+
+##### **关节Joint描述**
+
+机器人模型中的刚体最终要通过关节joint连接之后，才能产生相对运动。
+
+URDF中的关节有六种运动类型。
+
+![image-20220528144655899](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.3_URDF/image-20220528144655899.png)
+
+1. continuous，描述旋转运动，可以围绕某一个轴无限旋转，比如小车的轮子，就属于这种类型。
+2. revolute，也是旋转关节，和continuous类型的区别在于不能无限旋转，而是带有角度限制，比如机械臂的两个连杆，就属于这种运动。
+3. prismatic，是滑动关节，可以沿某一个轴平移，也带有位置的极限，一般直线电机就是这种运动方式。
+4. fixed，固定关节，是唯一一种不允许运动的关节，不过使用还是比较频繁的，比如相机这个连杆，安装在机器人上，相对位置是不会变化的，此时使用的连接方式就是Fixed。
+5. Floating是浮动关节，第六种planar是平面关节，这两种使用相对较少。
+
+![image-20220528144722751](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.3_URDF/image-20220528144722751.png)
+
+在URDF模型中，每一个link都使用这样一段xml内容描述，比如关节的名字叫什么，运动类型是哪一种。
+
+![image-20220528144729633](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.3_URDF/image-20220528144729633-16537204524521.png)
+
+- parent标签：描述父连杆；
+- child标签：描述子连杆，子连杆会相对父连杆发生运动；
+- origin：表示两个连杆坐标系之间的关系，也就是图中红色的向量，可以理解为这两个连杆该如何安装到一起；
+- axis表示关节运动轴的单位向量，比如z等于1，就表示这个旋转运动是围绕z轴的正方向进行的；
+- limit就表示运动的一些限制了，比如最小位置，最大位置，和最大速度等。
+
+<details class="info" open="open" style="box-sizing: inherit; background-color: var(--md-admonition-bg-color); border: 0.075rem solid rgb(0, 184, 212); border-radius: 0.2rem; box-shadow: var(--md-shadow-z1); color: rgba(0, 0, 0, 0.87); display: flow-root; font-size: 0.64rem; margin: 1.5625em 0px; padding: 0px 0.6rem; break-inside: avoid; transition: box-shadow 125ms; overflow: visible; font-family: Roboto, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;"><summary class="" style="box-sizing: border-box; background-color: rgba(0, 184, 212, 0.1); border-top: none; border-right: none; border-bottom: none; border-left: 0.2rem none; border-image: initial; font-weight: 700; margin: 0px -0.6rem; padding: 0.4rem 1.8rem 0.4rem 2rem; position: relative; cursor: pointer; display: block; min-height: 1rem; overflow: hidden; border-top-left-radius: 0.1rem; border-top-right-radius: 0.1rem; -webkit-tap-highlight-color: transparent; outline: none;">Info</summary><p style="box-sizing: border-box; margin-bottom: 0.6rem;">ROS中关于平移的默认单位是m，旋转是弧度（不是度），所以这里的3.14就表示可以在-180度到180度之间运动，线速度是m/s，角速度是rad/s。</p></details>
+
+##### **完整机器人模型**
+
+![image-20220528144900705](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.3_URDF/image-20220528144900705.png)
+
+最终所有的link和joint标签完成了对机器人每个部分的描述和组合，全都放在一个robot标签中，就形成了完整的机器人模型。
+
+![image-20220528144824234](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.3_URDF/image-20220528144824234.png)
+
+所以大家在看某一个URDF模型时，先不着急看每一块代码的细节，先来找link和joint，看下这个机器人是由哪些部分组成的，了解完全局之后，再看细节。
+
+#### **Gazebo：三维物理仿真平台**
+
+##### **介绍**
+
+Gazebo是ROS系统中最为常用的**三维物理仿真平台**，支持动力学引擎，可以实现高质量的图形渲染，不仅可以模拟机器人及周边环境，还可以加入摩擦力、弹性系数等物理属性。
+
+![image-20220528145639277](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528145639277.png)
+
+比如我们要开发一个火星车，那就可以在Gazebo中模拟火星表面的环境，再比如我们做无人机，续航和限飞都导致我们没有办法频繁用实物做实验，此时不妨使用Gazebo先做仿真，等算法开发的差不多了，再部署到实物上来运行。
+
+所以类似Gazebo这样的仿真平台，可以帮助我们验证机器人算法、优化机器人设计、测试机器人场景应用，为机器人开发提供更多可能。
+
+##### **安装**
+
+Gazebo如何使用呢？我们不妨先把它给跑起来，互相认识一下。
+
+为了确保系统中已经完整安装了Gazebo相关的功能包，大家可以通过这样一个命令，简单直接的把和gazebo相关的包都给装上：
+
+```bash
+sudo apt install ros-humble-gazebo-*
+```
+
+##### **运行**
+
+通过这句命令就可以启动啦：
+
+```bash
+ros2 launch gazebo_ros gazebo.launch.py
+```
+
+![image-20220528145818827](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528145818827.png)
+
+<details class="attention" open="open" style="box-sizing: inherit; background-color: var(--md-admonition-bg-color); border: 0.075rem solid rgb(68, 138, 255); border-radius: 0.2rem; box-shadow: var(--md-shadow-z1); color: rgba(0, 0, 0, 0.87); display: flow-root; font-size: 0.64rem; margin: 1.5625em 0px; padding: 0px 0.6rem; break-inside: avoid; transition: box-shadow 125ms; overflow: visible; font-family: Roboto, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;"><summary style="box-sizing: border-box; background-color: rgba(68, 138, 255, 0.1); border-top: none; border-right: none; border-bottom: none; border-left: 0.2rem none; border-image: initial; font-weight: 700; margin: 0px -0.6rem; padding: 0.4rem 1.8rem 0.4rem 2rem; position: relative; cursor: pointer; display: block; min-height: 1rem; overflow: hidden; border-top-left-radius: 0.1rem; border-top-right-radius: 0.1rem; -webkit-tap-highlight-color: transparent; outline: none;">Attention</summary><p style="box-sizing: border-box; margin-bottom: 0.6rem;">为保证模型顺利加载，请将离线模型下载并放置到~/.gazebo/models路径下</p></details>
+
+，下载链接如下：https://github.com/osrf/gazebo_models
+
+认识了Gazebo，接下来是不是该试试机器人仿真啦？
+
+大家还记得之前课程中，我们设计的移动机器人模型么？我们一起尝试把它放到Gazebo中，还要控制它在仿真环境中运动。
+
+##### **XACRO机器人模型优化**
+
+我们之前设计好的URDF模型此时还不能直接放到Gazebo中，需要我们做一些优化。这里给大家介绍一个URDF文件格式的升级版本——**XACRO文件**。
+
+同样也是对机器人URDF模型的创建，XACRO文件加入了更多编程化的实现方法，可以让模型创建更友好。
+
+![image-20220528145940535](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528145940535.png)
+
+比如：
+
+- **宏定义**，一个小车有4个轮子，每个轮子都一样，我们就没必要创建4个一样的link，像函数定义一样，做一个可重复使用的模块就可以了。
+- **文件包含**，复杂机器人的模型文件可能会很长，为了切分不同的模块，比如底盘、传感器，我们还可以把不同模块的模型放置在不同的文件中，然后再用一个总体文件做包含调用。
+- **可编程接口**，比如在XACRO模型文件中，定义一些常量，描述机器人的尺寸，定义一些变量，在调用宏定义的时候传递数据，还可以在模型中做数据计算，甚至加入条件语句，比如你的机器人叫A，就有摄像头，如果叫B，就没有摄像头。
+
+XACRO建模过程就像写代码一样，功能更为丰富了。
+
+接下来，我们就通过XACRO文件对移动机器人的模型做一下优化，大家先要使用这句命令安装必要的功能包。
+
+```
+$ sudo apt install ros-humble-xacro
+```
+
+以下是一些常用的XACRO文件语法，大家了解下。
+
+###### **常量定义**
+
+![image-20220528150321426](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150321426.png)
+
+<xacro:property>标签用来定义一些常量，比如这样定义一个PI的常量名为“M_PI”，值为“3.14159”，在调用的时候，通过$加大括号，里边就可以使用定义好的常量了。
+
+![image-20220528150331042](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150331042.png)
+
+针对原本移动机器人的URDF文件，我们就可以把底盘的质量、尺寸，轮子的质量、尺寸、安装位置，这些不会变化的数据，都通过常量定义，未来需要修改的时候也很方便，就不需要在模型文件中一行一行找了。
+
+![image-20220528150338969](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150338969.png)
+
+###### **数学计算**
+
+![image-20220528150430205](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150430205.png)
+
+如果需要做数学计算，同样是在“${}”中进行，比如某一个位置，我们可以通过这两个常量做运算得到，就加入了加法和除法运算。
+
+![image-20220528150435206](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150435206.png)
+
+在移动机器人的模型中，很多有相对关系的数据，我们尽量都改成公式计算，如果直接写结果的数值，未来修改的时候，可能根本想不起来这个数据是怎么来的。
+
+<details class="info" open="open" style="box-sizing: inherit; background-color: var(--md-admonition-bg-color); border: 0.075rem solid rgb(0, 184, 212); border-radius: 0.2rem; box-shadow: var(--md-shadow-z1); color: rgba(0, 0, 0, 0.87); display: flow-root; font-size: 0.64rem; margin: 1.5625em 0px; padding: 0px 0.6rem; break-inside: avoid; transition: box-shadow 125ms; overflow: visible; font-family: Roboto, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;"><summary style="box-sizing: border-box; background-color: rgba(0, 184, 212, 0.1); border-top: none; border-right: none; border-bottom: none; border-left: 0.2rem none; border-image: initial; font-weight: 700; margin: 0px -0.6rem; padding: 0.4rem 1.8rem 0.4rem 2rem; position: relative; cursor: pointer; display: block; min-height: 1rem; overflow: hidden; border-top-left-radius: 0.1rem; border-top-right-radius: 0.1rem; -webkit-tap-highlight-color: transparent; outline: none;">Info</summary><p style="box-sizing: border-box; margin-bottom: 0.6rem;">所有数学运算都会转换成浮点数进行，以保证运算精度</p></details>
+
+###### **宏定义**
+
+![image-20220528150542643](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150542643.png)
+
+机器人的轮子我们也做成宏定义，定义方式是通过这个<xacro:macro>标签描述的，还可以像函数一样，设置里边会用到的一些参数，比如这里的A、B、C。
+
+当需要使用这个宏的时候，就可以像这样，通过宏名字的标签，来调用，同时要记得把几个参数设置好。
+
+![image-20220528150603346](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150603346.png)
+
+比如在模型中，轮子的宏定义是这样的，包含了link描述和joint关节设置，link的名称和关节的位置，是通过输入的参数来区分的，在使用的时候，通过这两句调用，两个轮子就出现了。
+
+![image-20220528150619175](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150619175.png)
+
+这里的1和-1，是设置关节位置的，刚好是一个镜像关系。
+
+###### **文件包含**
+
+![image-20220528150712684](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150712684.png)
+
+宏定义是可以嵌套的，于是我们把机器人的底盘也做成了一个宏，然后使用另外一个模型文件，对底盘宏定义的文件做了一个包含，然后再调用。
+
+![image-20220528150741631](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150741631.png)
+
+这种流程是不是似曾相识，很像C语言中的include文件包含，然后再去调用里边的某些函数。
+
+到这里为止，仿真使用的模型优化还没有结束，接下来我们还得加入一些仿真必备的模块和参数。
+
+##### **机器人仿真模型配置**
+
+###### **完善物理参数**
+
+第一步是确保每一个link都有惯性参数和碰撞属性，因为Gazebo是物理仿真平台，必要的物理参数是一定需要的。
+
+![image-20220528150842585](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150842585.png)
+
+![image-20220528150832258](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150832258.png)
+
+###### **添加Gazebo标签**
+
+第二步是为link添加gazebo标签，主要是为了可以在gazebo中渲染每一个link的颜色，因为URDF中的颜色系统和gazebo中的不同，所以得做一步这样的冗余配置。
+
+![image-20220528150931153](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150931153.png)
+
+###### **配置传动装置**
+
+第三步是要给运动的joint配置传动装置，可以理解为仿真了一个电机。
+
+![image-20220528150958309](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528150958309.png)
+
+###### **添加控制器插件**
+
+第四步，要添加一个gazebo的控制器插件，小车是差速控制的，那就添加差速控制器插件，这样在不同角度下两个电机的速度分配，就可以交给控制器插件来完成了。
+
+![image-20220528151019063](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.4_Gazebo/image-20220528151019063.png)
+
+###### **构建仿真环境**
+
+接下来就考虑如何把模型加载到Gazebo中了，需要用到一个gazebo提供的功能节点spwan_entity。
+
+#### **Rviz三维可视化平台**
+
+机器人开发过程中，各种各样的功能，如果我们只是从数据层面去做分析，很难快速理解数据的效果，比如给你一堆0到255的数字，问这幅图像描述的内容是什么？你肯定一脸懵。但如果我们把这些数字通过颜色渲染出来，岂不就一目了然么？
+
+![image-20220528152054838](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152054838.jpg)
+
+![image-20220528152050544](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152050544.jpg)
+
+类似的场景还有很多，比如机器人模型，我们需要知道自己设计的模型长啥样，还有模型内部众多坐标系在运动过程中都在哪些位置。
+
+再比如机械臂运动规划和移动机器人自主导航，我们希望可以看到机器人周边的环境、规划的路径，当然还有传感器的信息，摄像头、三维相机、激光雷达等等，数据是用来做计算的，可视化的效果才是给人看的。
+
+所以，数据可视化可以大大提高开发效率，Rviz就是这样一款机器人开发过程中的数据可视化软件，机器人模型、传感器信息、环境信息等等，全都可以在这里搞定。
+
+##### **Rviz介绍**
+
+一句话说明Rviz的功能，只要有数据，它就可以可视化，只有我们想不到的，没有Rviz做不到的。
+
+![image-20220528151929609](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528151929609.jpg)
+
+Rviz的核心框架是基于**Qt可视化工具**打造的一个开放式平台，官方出厂就自带了很多机器人常用的可视化显示插件，只要我们按照ROS中的消息发布对应的话题，就可以看到图形化的效果了。如果我们对显示的效果不满意，或者想添加某些新的显示项，也可以在Rviz这个平台中，开发更多可视化效果，方便打造我们自己的上位机。
+
+##### **运行方法**
+
+启动一个终端，使用如下命令即可启动：
+
+```
+$ ros2 run rviz2 rviz2
+```
+
+![image-20220528152204601](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152204601.jpg)
+
+##### **彩色相机仿真与可视化**
+
+摄像头肯定是最为常用的一种传感器了，我们先来给机器人装上摄像头。
+
+###### **仿真插件配置**
+
+关于传感器的仿真，都需要使用Gazebo提供的插件，摄像头对应的插件叫做libgazebo_ros_camera.so，我们对照模型的代码给大家介绍这个插件的使用方法。
+
+learning_gazebo/urdf/sensers/camera_gazebo.xacro
+
+```
+<gazebo reference="${prefix}_link">
+    <sensor type="camera" name="camera_node">
+        <update_rate>30.0</update_rate>
+        <camera name="head">
+            <horizontal_fov>1.3962634</horizontal_fov>
+            <image>
+                <width>1280</width>
+                <height>720</height>
+                <format>R8G8B8</format>
+            </image>
+            <clip>
+                <near>0.02</near>
+                <far>300</far>
+            </clip>
+            <noise>
+                <type>gaussian</type>
+                <mean>0.0</mean>
+                <stddev>0.007</stddev>
+            </noise>
+        </camera>
+        <plugin name="gazebo_camera" filename="libgazebo_ros_camera.so">
+            <ros>
+                <!-- <namespace>stereo</namespace> -->
+                <remapping>~/image_raw:=image_raw</remapping>
+                <remapping>~/camera_info:=camera_info</remapping>
+            </ros>
+            <camera_name>${prefix}</camera_name>
+            <frame_name>${prefix}_link</frame_name>
+            <hack_baseline>0.2</hack_baseline>
+        </plugin>
+    </sensor>
+</gazebo>
+```
+
+主要配置项如下：
+
+- <sensor>标签：描述传感器
+
+> type：传感器类型，camera
+>
+> name：摄像头命名，自由设置
+
+- <camera>标签：描述摄像头参数
+
+> 分辨率，编码格式，图像范围，噪音参数等
+
+- <plugin>标签：加载摄像头仿真插件
+
+###### **运行仿真环境**
+
+模型已经配置好啦，能不能把摄像头成功仿真出来，并且在Rviz中看到图像信息，我们拭目以待。
+
+```
+$ ros2 launch learning_gazebo load_mbot_camera_into_gazebo.launch.py
+```
+
+![image-20220528152414923](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152414923.jpg)
+
+可以使用命令行看下仿真出来的图像话题：
+
+![image-20220528152456256](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152456256.jpg)
+
+###### **图像数据可视化**
+
+我们使用Rviz可视化显示图像信息，先来启动Rviz：
+
+```
+$ ros2 run rviz2 rviz2
+```
+
+启动成功后，在左侧Displays窗口中点击“Add”，找到Image显示项，OK确认后就可以加入显示列表啦，然后配置好该显示项订阅的图像话题，就可以顺利看到机器人的摄像头图像啦。
+
+![image-20220528152442483](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152442483.jpg)
+
+##### **三维相机仿真与可视化**
+
+二维摄像头不过瘾，想不想试试三维相机，比如我们常用的Kinect体感传感器，或者Intel的Realsense，可以获取外部环境的点云数据。这种相机的价格比usb摄像头可贵不少，不过我们也可以通过仿真，一分钱不用，就可以玩起来。
+
+###### **仿真插件配置**
+
+三维相机使用的Gazebo插件也是libgazebo_ros_camera.so，配置方法如下：
+
+learning_gazebo/urdf/sensers/kinect_gazebo.xacro
+
+```
+<gazebo reference="${prefix}_link">
+    <sensor type="depth" name="${prefix}">
+        <always_on>true</always_on>
+        <update_rate>15.0</update_rate>
+        <pose>0 0 0 0 0 0</pose>
+        <camera name="kinect">
+            <horizontal_fov>${60.0*M_PI/180.0}</horizontal_fov>
+            <image>
+                <format>R8G8B8</format>
+                <width>640</width>
+                <height>480</height>
+            </image>
+            <clip>
+                <near>0.05</near>
+                <far>8.0</far>
+            </clip>
+        </camera>
+        <plugin name="${prefix}_controller" filename="libgazebo_ros_camera.so">
+            <ros>
+                <!-- <namespace>${prefix}</namespace> -->
+                <remapping>${prefix}/image_raw:=rgb/image_raw</remapping>
+                <remapping>${prefix}/image_depth:=depth/image_raw</remapping>
+                <remapping>${prefix}/camera_info:=rgb/camera_info</remapping>
+                <remapping>${prefix}/camera_info_depth:=depth/camera_info</remapping>
+                <remapping>${prefix}/points:=depth/points</remapping>
+            </ros>
+            <camera_name>${prefix}</camera_name>
+            <frame_name>${prefix}_frame_optical</frame_name>
+            <hack_baseline>0.07</hack_baseline>
+            <min_depth>0.001</min_depth>
+            <max_depth>300.0</max_depth>
+        </plugin>
+    </sensor>
+</gazebo>
+```
+
+###### **运行仿真环境**
+
+使用如下命令启动仿真环境：
+
+```
+$ ros2 launch learning_gazebo load_mbot_rgbd_into_gazebo.launch.py
+```
+
+![image-20220528152559248](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152559248.jpg)
+
+启动成功后，可以看下当前的话题列表，已经产生了三维相机的相关话题。
+
+![image-20220528152611362](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152611362.jpg)
+
+##### **点云数据可视化**
+
+运行Rviz：
+
+```
+$ ros2 run rviz2 rviz2
+```
+
+同样的流程，点击Add，添加PointCloud2，设置订阅的点云话题，还要配置Rviz的参考系是odom，就可以看到点云数据啦，每一个点都是由xyz位置和rgb颜色组成。
+
+![image-20220528152552742](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152552742.jpg)
+
+##### **激光雷达仿真与可视化**
+
+除了摄像头和三维相机，激光雷达也是很多移动机器人常备的传感器，包括自动驾驶汽车，我们也来试一试。
+
+###### **仿真插件配置**
+
+雷达使用的Gazebo插件是libgazebo_ros_ray_sensor.so，配置方法如下：
+
+learning_gazebo/urdf/sensers/lidar_gazebo.xacro
+
+```
+<gazebo reference="${prefix}_link">
+    <sensor type="ray" name="rplidar">
+        <update_rate>20</update_rate>
+        <ray>
+            <scan>
+              <horizontal>
+                <samples>360</samples>
+                <resolution>1</resolution>
+                <min_angle>-3</min_angle>
+                <max_angle>3</max_angle>
+              </horizontal>
+            </scan>
+            <range>
+              <min>0.10</min>
+              <max>30.0</max>
+              <resolution>0.01</resolution>
+            </range>
+            <noise>
+              <type>gaussian</type>
+              <mean>0.0</mean>
+              <stddev>0.01</stddev>
+            </noise>
+        </ray>
+        <plugin name="gazebo_rplidar" filename="libgazebo_ros_ray_sensor.so">
+      <ros>
+    <namespace>/</namespace>
+    <remapping>~/out:=scan</remapping>
+      </ros>
+      <output_type>sensor_msgs/LaserScan</output_type>
+        </plugin>
+    </sensor>
+</gazebo>
+```
+
+###### **运行仿真环境**
+
+使用如下命令启动仿真环境：
+
+```
+$ ros2 launch learning_gazebo load_mbot_laser_into_gazebo.launch.py
+```
+
+![image-20220528152754541](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152754541.jpg)
+
+在话题列表中也可以看到激光雷达啦。
+
+![image-20220528152810332](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152810332.jpg)
+
+##### **点云数据可视化**
+
+启动Rviz：
+
+```
+$ ros2 run rviz2 rviz2
+```
+
+点击Add，选择Laserscan，然后配置订阅的话题名，rviz的固定坐标系依然是odom，此时就可以看到激光点啦。
+
+![image-20220528152821691](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152821691.jpg)
+
+##### **Rviz vs Gazebo**
+
+好啦，通过这几个案例，相信大家对Rviz可视化平台的使用流程已经非常熟悉了，也了解了常用传感器的仿真方法。
+
+讲到这里，Gazebo和Rviz这两个软件的具体功能，大家是不是会有一些混淆。
+
+![image-20220528152913715](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.5_Rviz/image-20220528152913715.jpg)
+
+我们再来强调下：
+
+- Gazebo是**仿真平台**，核心功能是**创造数据**，我们没有机器人或者传感器，它可以帮我们做一个虚拟的；
+- Rviz是**可视化平台**，核心功能是**显示数据**，如果没有数据，它也巧妇难为无米之炊。
+
+所以在很多时候，我们使用Gazebo做机器人仿真的时候，也会启动Rviz来显示仿真环境的信息，如果自己手上有真实机器人的话，Gazebo就用不到了，不过还是会用Rviz显示真实机器人传感器的信息。
+
+### **rqt介绍**
+
+正如RQT的命名，它和Rviz一样，也是基于QT可视化工具开发而来，在使用前，我们需要通过这样一句指令进行安装，然后就可以通过rqt这个命令启动使用了。
+
+```
+$ sudo apt install ros-humble-rqt
+$ rqt
+```
+
+![image-20220528153119321](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.6_Rqt/image-20220528153119321.png)
+
+类似这个界面一样，里边可以加载很多小模块，每个模块都可以实现一个具体的小功能，一些常用的功能如下：
+
+#### **日志显示**
+
+![image-20220528153332794](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.6_Rqt/image-20220528153332794.png)
+
+#### **图像显示**
+
+![image-20220528153354370](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.6_Rqt/image-20220528153354370.png)
+
+#### **发布话题数据/调用服务请求**
+
+![image-20220528153406339](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.6_Rqt/image-20220528153406339.png)
+
+#### **绘制数据曲线**
+
+![image-20220528153414784](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.6_Rqt/image-20220528153414784.png)
+
+#### **数据包管理**
+
+![image-20220528153423185](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.6_Rqt/image-20220528153423185.png)
+
+#### **节点可视化**
+
+![image-20220528153433016](https://book.guyuehome.com/ROS2/3.%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7/image/3.6_Rqt/image-20220528153433016.png)
